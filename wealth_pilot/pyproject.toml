@@ -1,0 +1,9 @@
+[project]
+name = "wealth_pilot"
+version = "0.1.0"
+description = "AI Wealth Advisor — ADK Masterclass Section 2 Demo"
+requires-python = ">=3.13"
+dependencies = [
+    "google-adk>=1.27.2",
+    "yfinance>=0.2.0",
+]
