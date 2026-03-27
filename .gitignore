@@ -1,6 +1,9 @@
 # ADK
 .adk/
 
+# Agent rules
+.agent/
+
 # Python
 __pycache__/
 *.py[cod]

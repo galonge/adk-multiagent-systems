@@ -4,7 +4,12 @@ Built with Google Agent Development Kit (ADK)
 """
 
 from google.adk.agents import LlmAgent, SequentialAgent
-from .tools.stock_tools import fetch_stock_price, get_company_info
+from .tools.stock_tools import fetch_stock_price, get_company_info, save_user_preferences
+from .callbacks.guardrails import (
+    audit_log_before_agent,
+    add_disclaimer_after_model,
+    validate_ticker_before_tool,
+)
 
 # ── Stock Analyst ─────────────────────────────────────
 stock_analyst = LlmAgent(
@@ -26,6 +31,8 @@ When asked about a stock:
 Keep your analysis factual and data-driven.
 Do NOT make specific buy/sell recommendations.""",
     tools=[fetch_stock_price, get_company_info],
+    before_tool_callback=validate_ticker_before_tool,
+    
 )
 
 # ── Portfolio Advisor ─────────────────────────────────
@@ -36,7 +43,7 @@ portfolio_advisor = LlmAgent(
     instruction="""You are a Portfolio Advisor at WealthPilot.
 Your job is to recommend portfolio allocations based on:
 - The stock analyses provided by StockAnalyst
-- The user's risk tolerance and investment horizon
+- The user's preferences from session state (check for: risk_tolerance, investment_budget, investment_horizon)
 
 Guidelines by risk tolerance:
 - Conservative: max 40% stocks, 60%+ bonds/stable assets
@@ -83,10 +90,15 @@ You have a team of specialist agents to help you:
 
 ## Conversation Flow
 1. Greet the user warmly
-2. Ask about their investment goals, budget, risk tolerance
-3. When they want analysis, transfer to AnalysisPipeline
+2. Use LoadMemoryTool to check for any past preferences or conversations with this user
+3. Ask about their investment goals, budget, risk tolerance
+4. Save Preferences using save_user_preferences tool once you have the info
+5. When they want analysis, transfer to AnalysisPipeline
 
 Be conversational, warm, and professional.
 Always include: "This is AI-generated analysis, not financial advice." """,
     sub_agents=[analysis_pipeline],
+    before_agent_callback=audit_log_before_agent,
+    after_model_callback=add_disclaimer_after_model,
+    tools=[save_user_preferences],
 )
