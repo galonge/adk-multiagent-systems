@@ -66,4 +66,10 @@ def validate_ticker_before_tool(
     return None  # Valid — let the tool proceed
 
 
-    
+# ── AFTER AGENT — Save to Memory ─────────────────────
+async def save_to_memory_after_agent(callback_context: CallbackContext) -> None:
+    """saves the current session to memory after each agent run."""
+    agent_name = callback_context.agent_name
+    await callback_context.add_session_to_memory()
+    print(f"🧠 [MEMORY] Session saved to memory after '{agent_name}'")
+    return None

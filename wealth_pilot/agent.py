@@ -9,7 +9,12 @@ from .callbacks.guardrails import (
     audit_log_before_agent,
     add_disclaimer_after_model,
     validate_ticker_before_tool,
+    save_to_memory_after_agent,
 )
+from google.adk.tools.load_memory_tool import LoadMemoryTool
+from .tools.calc_tools import calculate_compound_returns, calculate_portfolio_allocation
+from .tools.report_tools import save_portfolio_report
+from google.genai import types
 
 # ── Stock Analyst ─────────────────────────────────────
 stock_analyst = LlmAgent(
@@ -50,7 +55,12 @@ Guidelines by risk tolerance:
 - Moderate: 50-70% stocks, 30-50% bonds
 - Aggressive: 70-90% stocks, 10-30% bonds
 
+Use your tools:
+- calculate_compound_returns: to project growth over the investment horizon
+- calculate_portfolio_allocation: to compute dollar amounts for each position
+
 Always explain your reasoning.""",
+    tools=[calculate_compound_returns, calculate_portfolio_allocation],
 )
 
 # ── Report Generator ──────────────────────────────────
@@ -64,8 +74,10 @@ Create a comprehensive portfolio report including:
 2. Stock Analysis
 3. Recommended Allocation
 4. Risk Assessment
+5. Save the report as a versioned artifact using save_portfolio_report tool
 
 Format your output in clean Markdown.""",
+    tools=[save_portfolio_report],
 )
 
 
@@ -100,5 +112,12 @@ Always include: "This is AI-generated analysis, not financial advice." """,
     sub_agents=[analysis_pipeline],
     before_agent_callback=audit_log_before_agent,
     after_model_callback=add_disclaimer_after_model,
-    tools=[save_user_preferences],
+    tools=[save_user_preferences, LoadMemoryTool()],
+    after_agent_callback=save_to_memory_after_agent,
+    generate_content_config=types.GenerateContentConfig(
+        thinking_config=types.ThinkingConfig(
+            include_thoughts=True,
+            thinking_budget=2048,
+        )
+    ),
 )

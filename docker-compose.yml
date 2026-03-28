@@ -1,0 +1,35 @@
+services:
+  backend:
+    build:
+      context: ./wealth_pilot
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+    env_file:
+      - ./wealth_pilot/.env
+    volumes:
+      # Mount source code for hot reload
+      - ./wealth_pilot/main.py:/app/main.py
+      - ./wealth_pilot/agent.py:/app/wealth_pilot/agent.py
+      - ./wealth_pilot/__init__.py:/app/wealth_pilot/__init__.py
+      - ./wealth_pilot/tools:/app/wealth_pilot/tools
+      - ./wealth_pilot/callbacks:/app/wealth_pilot/callbacks
+      - ./wealth_pilot/.env:/app/wealth_pilot/.env
+
+  frontend:
+    build:
+      context: ./wealth_pilot_ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    volumes:
+      # Mount source code for hot reload
+      - ./wealth_pilot_ui/app:/app/app
+      - ./wealth_pilot_ui/public:/app/public
+      - ./wealth_pilot_ui/next.config.ts:/app/next.config.ts
+    depends_on:
+      - backend
