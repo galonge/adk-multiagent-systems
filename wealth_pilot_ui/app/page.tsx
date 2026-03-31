@@ -193,9 +193,9 @@ export default function Chat() {
                   if (part.text) {
                     agentText += part.text;
                   }
-                  if (part.functionCall?.name) {
+                    if (part.functionCall?.name) {
                     currentTool = part.functionCall.name;
-                    if (!toolCalls.includes(currentTool)) {
+                    if (currentTool && !toolCalls.includes(currentTool)) {
                       toolCalls.push(currentTool);
                     }
                   }

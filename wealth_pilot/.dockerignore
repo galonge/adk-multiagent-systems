@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.adk/
+.env
+.python-version
+uv.lock
+runner_demo.py
+main.py
+Dockerfile
+.git/
