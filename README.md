@@ -2,6 +2,8 @@
 
 > Course companion repo — build, run, and deploy production multi-agent systems with the [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/).
 
+🎓 **[Enroll in the Udemy Course →](https://www.udemy.com/course/building-multi-agent-systems-google-adk-masterclass/?couponCode=ADK_GENESIS)**
+
 ## What You'll Learn
 
 - **Multi-agent orchestration** — Deterministic and Non-deterministic agents using `SequentialAgent`, `LlmAgent`, `LoopAgent`, `ParallelAgent` sub-agent delegation
