@@ -3,6 +3,10 @@ WealthPilot — AI Wealth Advisor
 Built with Google Agent Development Kit (ADK)
 """
 
+# enable agentops
+# import agentops
+# agentops.init()
+
 from google.adk.agents import LlmAgent, SequentialAgent
 from .tools.stock_tools import fetch_stock_price, get_company_info, save_user_preferences
 from .callbacks.guardrails import (
