@@ -8,7 +8,14 @@ import base64
 import uvicorn
 from fastapi import HTTPException
 from fastapi.responses import Response
+
 from google.adk.cli.fast_api import get_fast_api_app
+import logging
+
+# import agentops
+# agentops.init(
+#     api_key=os.getenv("AGENT_OPS_API_KEY"),
+# )
 
 # AGENT_DIR must be the PARENT directory that CONTAINS agent folders.
 # get_fast_api_app scans subdirectories looking for agent.py files.
@@ -23,6 +30,11 @@ if os.path.exists(os.path.join(AGENT_DIR, "agent.py")):
 
 # Allow all origins for the custom frontend
 ALLOWED_ORIGINS = ["*"]
+
+logging.basicConfig(
+   level=logging.INFO,
+   format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+)
 
 # Create the FastAPI app using ADK's helper
 # web=False — we don't need the Dev UI in production

@@ -2,3 +2,4 @@ google-adk
 yfinance
 fpdf2
 httpx
+agentops

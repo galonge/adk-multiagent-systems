@@ -7,4 +7,5 @@ dependencies = [
     "google-adk>=1.27.2",
     "yfinance>=0.2.0",
     "fpdf2",
+    "agentops>=0.4.21",
 ]
