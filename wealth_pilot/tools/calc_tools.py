@@ -26,22 +26,26 @@ def calculate_compound_returns(
     for year in range(1, years + 1):
         interest = balance * (annual_return_pct / 100)
         balance += interest
-        yearly_breakdown.append({
-            "year": year,
-            "starting_balance": round(balance - interest, 2),
-            "interest_earned": round(interest, 2),
-            "ending_balance": round(balance, 2),
-        })
+        yearly_breakdown.append(
+            {
+                "year": year,
+                "starting_balance": round(balance - interest, 2),
+                "interest_earned": round(interest, 2),
+                "ending_balance": round(balance, 2),
+            }
+        )
 
-    return json.dumps({
-        "principal": principal,
-        "annual_return_pct": annual_return_pct,
-        "years": years,
-        "final_balance": round(balance, 2),
-        "total_gain": round(balance - principal, 2),
-        "total_return_pct": round((balance - principal) / principal * 100, 2),
-        "yearly_breakdown": yearly_breakdown,
-    })
+    return json.dumps(
+        {
+            "principal": principal,
+            "annual_return_pct": annual_return_pct,
+            "years": years,
+            "final_balance": round(balance, 2),
+            "total_gain": round(balance - principal, 2),
+            "total_return_pct": round((balance - principal) / principal * 100, 2),
+            "yearly_breakdown": yearly_breakdown,
+        }
+    )
 
 
 def calculate_portfolio_allocation(
@@ -66,12 +70,19 @@ def calculate_portfolio_allocation(
     total_pct = sum(allocations.values())
     result = {}
     for ticker, pct in allocations.items():
-        result[ticker] = {"percentage": pct, "dollar_amount": round(budget * pct / 100, 2)}
+        result[ticker] = {
+            "percentage": pct,
+            "dollar_amount": round(budget * pct / 100, 2),
+        }
 
-    return json.dumps({
-        "budget": budget,
-        "total_allocated_pct": total_pct,
-        "is_valid": abs(total_pct - 100) < 0.01,
-        "positions": result,
-        "warning": None if abs(total_pct - 100) < 0.01 else f"Allocations sum to {total_pct}%, not 100%",
-    })
+    return json.dumps(
+        {
+            "budget": budget,
+            "total_allocated_pct": total_pct,
+            "is_valid": abs(total_pct - 100) < 0.01,
+            "positions": result,
+            "warning": None
+            if abs(total_pct - 100) < 0.01
+            else f"Allocations sum to {total_pct}%, not 100%",
+        }
+    )

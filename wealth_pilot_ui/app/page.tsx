@@ -2,6 +2,13 @@
 
 import { useState, useRef, useEffect, useCallback, FormEvent } from "react";
 import ReactMarkdown from "react-markdown";
+import { V2 } from "./config";
+import { useModels } from "./hooks/useModels";
+import { useTheme } from "./hooks/useTheme";
+import { ModelSelector } from "./components/ModelSelector";
+import { ThemeToggle } from "./components/ThemeToggle";
+import { WarmupBanner } from "./components/WarmupBanner";
+import { Toast } from "./components/Toast";
 
 /* ── Types ───────────────────────────────────────── */
 interface Artifact {
@@ -14,6 +21,7 @@ interface Message {
   id: string;
   role: "user" | "agent";
   text: string;
+  thinking?: string;
   tools?: string[];
   artifacts?: Artifact[];
 }
@@ -25,9 +33,13 @@ interface AgentStep {
 }
 
 /* ── Config ──────────────────────────────────────── */
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 const APP_NAME = "wealth_pilot";
 const USER_ID = "demo_user";
+
+/* when API_URL is empty (production), calls go to /api/agent/* on the same domain.
+   when set to http://localhost:8080 (local dev), calls go to the ADK server directly. */
+const useProxy = !API_URL;
 
 /* ── Component ───────────────────────────────────── */
 export default function Chat() {
@@ -36,8 +48,15 @@ export default function Chat() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
+  const [warmupDismissed, setWarmupDismissed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // V2 hooks
+  const { models, selectedModel, selectModel, gemmaStatus, gemmaJustBecameReady, clearGemmaReadyFlag } = useModels();
+  const { theme, toggleTheme } = useTheme();
+
+  const showWarmupBanner = V2 && selectedModel?.id === "gemma-4-31b" && gemmaStatus === "warming_up" && !warmupDismissed;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -45,18 +64,22 @@ export default function Chat() {
 
   useEffect(scrollToBottom, [messages]);
 
-  /* Create session on mount */
+  /* create session on mount */
   const createSession = useCallback(async () => {
     try {
-      const res = await fetch(
-        `${API_URL}/apps/${APP_NAME}/users/${USER_ID}/sessions`,
-        { method: "POST", headers: { "Content-Type": "application/json" } }
-      );
+      const url = useProxy
+        ? "/api/agent/sessions"
+        : `${API_URL}/apps/${APP_NAME}/users/${USER_ID}/sessions`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: useProxy ? JSON.stringify({ user_id: USER_ID }) : undefined,
+      });
       const data = await res.json();
       setSessionId(data.id);
       return data.id;
     } catch (err) {
-      console.error("Failed to create session:", err);
+      console.error("failed to create session:", err);
       return null;
     }
   }, []);
@@ -64,6 +87,22 @@ export default function Chat() {
   useEffect(() => {
     createSession();
   }, [createSession]);
+
+  /* sync model preference to backend whenever a new session is created.
+     without this, run_sse fires before set-model, so the backend uses
+     the agent's hardcoded default instead of the user's selection. */
+  useEffect(() => {
+    if (!V2 || !sessionId) return;
+    const modelId = selectedModel?.id || "gemini-flash";
+    const url = useProxy
+      ? "/api/agent/set-model"
+      : `${API_URL}/api/set-model`;
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: modelId, session_id: sessionId }),
+    }).catch(() => {});
+  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* New chat */
   const handleNewChat = async () => {
@@ -74,14 +113,14 @@ export default function Chat() {
     if (id) setSessionId(id);
   };
 
-  /* Download artifact — opens the backend download endpoint directly */
+  /* download artifact — proxy in production, direct in local dev */
   const handleDownload = (artifact: Artifact) => {
     const sid = artifact.sessionId;
     if (!sid) return;
-    window.open(
-      `${API_URL}/download/${APP_NAME}/${USER_ID}/${sid}/${artifact.name}`,
-      "_blank"
-    );
+    const url = useProxy
+      ? `/api/agent/artifacts?filename=${encodeURIComponent(artifact.name)}&session_id=${encodeURIComponent(sid)}&user_id=${encodeURIComponent(USER_ID)}`
+      : `${API_URL}/download/${APP_NAME}/${USER_ID}/${sid}/${artifact.name}`;
+    window.open(url, "_blank");
   };
 
   /* Derive a friendly action description */
@@ -131,7 +170,8 @@ export default function Chat() {
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     try {
-      const res = await fetch(`${API_URL}/run_sse`, {
+      const runUrl = useProxy ? "/api/agent/run_sse" : `${API_URL}/run_sse`;
+      const res = await fetch(runUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -154,13 +194,14 @@ export default function Chat() {
       const decoder = new TextDecoder();
       let buffer = "";
       let agentText = "";
+      let thinkingText = "";
       const toolCalls: string[] = [];
       const artifacts: Artifact[] = [];
       const agentMsgId = crypto.randomUUID();
       const steps: AgentStep[] = [];
       const seenAgents = new Set<string>();
 
-      // Add placeholder agent message
+      // add placeholder agent message
       setMessages((prev) => [
         ...prev,
         { id: agentMsgId, role: "agent", text: "", tools: [], artifacts: [] },
@@ -181,19 +222,34 @@ export default function Chat() {
 
           try {
             const event = JSON.parse(jsonStr);
+
+            // ADK error event (e.g. Gemini overload, tool failure)
+            if (event.error) {
+              const msg = String(event.error);
+              const isOverload = msg.includes("503") || msg.includes("high demand") || msg.includes("UNAVAILABLE");
+              agentText = isOverload
+                ? "The AI model is experiencing high demand. Please try again in a moment."
+                : `An error occurred: ${msg.slice(0, 200)}`;
+              continue;
+            }
+
             const author = event.author || "";
 
             // Track agent activity
             if (author && author !== "user") {
               let currentTool: string | undefined;
 
-              // Extract text from content parts
+              // extract text from content parts, separating thoughts
               if (event.content?.parts) {
                 for (const part of event.content.parts) {
                   if (part.text) {
-                    agentText += part.text;
+                    if (part.thought) {
+                      thinkingText += part.text;
+                    } else {
+                      agentText += part.text;
+                    }
                   }
-                    if (part.functionCall?.name) {
+                  if (part.functionCall?.name) {
                     currentTool = part.functionCall.name;
                     if (currentTool && !toolCalls.includes(currentTool)) {
                       toolCalls.push(currentTool);
@@ -221,9 +277,15 @@ export default function Chat() {
                 setAgentSteps([...steps]);
               }
             } else if (event.content?.parts) {
-              // Events without author
+              // events without author
               for (const part of event.content.parts) {
-                if (part.text) agentText += part.text;
+                if (part.text) {
+                  if (part.thought) {
+                    thinkingText += part.text;
+                  } else {
+                    agentText += part.text;
+                  }
+                }
               }
             }
 
@@ -242,13 +304,14 @@ export default function Chat() {
               }
             }
 
-            // Update the message incrementally
+            // update the message incrementally
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === agentMsgId
                   ? {
                     ...m,
                     text: agentText,
+                    thinking: thinkingText || undefined,
                     tools: [...toolCalls],
                     artifacts: [...artifacts],
                   }
@@ -261,8 +324,8 @@ export default function Chat() {
         }
       }
 
-      // Final update
-      if (!agentText.trim()) {
+      // final update — only show fallback if neither text nor thinking content exists
+      if (!agentText.trim() && !thinkingText.trim()) {
         agentText = "(Agent processed your request — check the results above)";
       }
       setMessages((prev) =>
@@ -271,6 +334,7 @@ export default function Chat() {
             ? {
               ...m,
               text: agentText,
+              thinking: thinkingText || undefined,
               tools: [...toolCalls],
               artifacts: [...artifacts],
             }
@@ -313,16 +377,44 @@ export default function Chat() {
 
   return (
     <div className="app">
+      {/* V2: Toast notification */}
+      {V2 && (
+        <Toast
+          message="Gemma 4 is ready!"
+          visible={gemmaJustBecameReady}
+          onDismiss={clearGemmaReadyFlag}
+        />
+      )}
+
       {/* Header */}
       <header className="header">
         <div className="header-left">
           <span className="logo">WealthPilot</span>
           <span className="badge">AI Advisor</span>
         </div>
-        <button className="new-chat-btn" onClick={handleNewChat}>
-          New Chat
-        </button>
+        <div className="header-controls">
+          {V2 && (
+            <ModelSelector
+              models={models}
+              selectedModel={selectedModel}
+              onSelect={(id) => selectModel(id, sessionId)}
+            />
+          )}
+          {V2 && <ThemeToggle theme={theme} onToggle={toggleTheme} />}
+          <button className="new-chat-btn" onClick={handleNewChat}>
+            New Chat
+          </button>
+        </div>
       </header>
+
+      {/* V2: Warmup banner */}
+      {showWarmupBanner && (
+        <WarmupBanner
+          modelName="Gemma 4"
+          onSwitchToGemini={() => selectModel("gemini-flash", sessionId)}
+          onDismiss={() => setWarmupDismissed(true)}
+        />
+      )}
 
       {/* Messages */}
       <div className="messages">
@@ -338,7 +430,11 @@ export default function Chat() {
           messages.map((msg) => (
             <div key={msg.id} className={`message ${msg.role}`}>
               <span className="message-label">
-                {msg.role === "user" ? "You" : "WealthPilot"}
+                {msg.role === "user"
+                  ? "You"
+                  : V2 && selectedModel
+                    ? `WealthPilot · ${selectedModel.name}`
+                    : "WealthPilot"}
               </span>
               {msg.tools && msg.tools.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -352,11 +448,26 @@ export default function Chat() {
                   ))}
                 </div>
               )}
+              {/* thinking block — collapsible reasoning, open while streaming */}
+              {msg.thinking && (
+                <details
+                  className={`thinking-block ${isLoading && !msg.text ? "active" : ""}`}
+                  open={isLoading || !msg.text}
+                >
+                  <summary className="thinking-summary">
+                    <span className="thinking-indicator" />
+                    <span>{isLoading && !msg.text ? "Thinking…" : "Thought process"}</span>
+                  </summary>
+                  <div className="thinking-content">
+                    <ReactMarkdown>{msg.thinking}</ReactMarkdown>
+                  </div>
+                </details>
+              )}
               {msg.text ? (
                 <div className="message-content">
                   <ReactMarkdown>{msg.text}</ReactMarkdown>
                 </div>
-              ) : isLoading ? (
+              ) : isLoading && !msg.thinking ? (
                 <div className="typing">
                   <span />
                   <span />
@@ -450,7 +561,7 @@ export default function Chat() {
           </button>
         </form>
         <p className="footer-text">
-          AI-generated analysis — not financial advice
+          {V2 && selectedModel ? `Powered by ${selectedModel.name} · ` : ""}AI-generated analysis — not financial advice
         </p>
       </div>
     </div>

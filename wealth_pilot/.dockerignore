@@ -6,6 +6,4 @@ __pycache__/
 .python-version
 uv.lock
 runner_demo.py
-main.py
-Dockerfile
 .git/

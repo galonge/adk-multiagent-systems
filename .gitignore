@@ -30,3 +30,9 @@ Thumbs.db
 
 # AgentOps logs
 .agentops.log
+
+# Pulumi
+.passphrase
+!.passphrase.example
+extensions/v2/infra/Pulumi.dev.yaml
+extensions/gemma4/cloudrun/infra/Pulumi.dev.yaml

@@ -40,13 +40,14 @@ async def main():
 
     # ── Create a session ─────────────────────────────
     session = await session_service.create_session(
-        app_name=APP_NAME, user_id=USER_ID,
+        app_name=APP_NAME,
+        user_id=USER_ID,
     )
 
-    print(f"\n🎯 WealthPilot — Full Runner Demo")
+    print("\n🎯 WealthPilot — Full Runner Demo")
     print(f"Session ID: {session.id}")
-    print(f"Services: Session ✅ Memory ✅ Artifacts ✅")
-    print(f"Type 'quit' to exit\n")
+    print("Services: Session ✅ Memory ✅ Artifacts ✅")
+    print("Type 'quit' to exit\n")
 
     # ── Interactive loop ─────────────────────────────
     while True:
@@ -60,7 +61,9 @@ async def main():
         )
         print("\nWealthPilot: ", end="", flush=True)
         async for event in runner.run_async(
-            user_id=USER_ID, session_id=session.id, new_message=content,
+            user_id=USER_ID,
+            session_id=session.id,
+            new_message=content,
         ):
             if event.content and event.content.parts:
                 for part in event.content.parts:
@@ -70,9 +73,11 @@ async def main():
 
     # ── Session summary ──────────────────────────────
     final_session = await session_service.get_session(
-        app_name=APP_NAME, user_id=USER_ID, session_id=session.id,
+        app_name=APP_NAME,
+        user_id=USER_ID,
+        session_id=session.id,
     )
-    print(f"\n📊 Session Summary")
+    print("\n📊 Session Summary")
     print(f"Events: {len(final_session.events)}\n")
 
 
