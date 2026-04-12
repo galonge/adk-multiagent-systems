@@ -1,0 +1,16 @@
+# Copy this file to Pulumi.dev.yaml and fill in your values.
+# Pulumi.dev.yaml is gitignored — never commit it.
+#
+#   cp Pulumi.dev.yaml.example Pulumi.dev.yaml
+#
+# Then run: pulumi stack init dev
+# (this generates the encryptionsalt and adds it to Pulumi.dev.yaml automatically)
+
+config:
+  gcp:project: <YOUR_GCP_PROJECT_ID>
+  gcp:region: us-central1
+  wealthpilot-v2:project: <YOUR_GCP_PROJECT_ID>
+  wealthpilot-v2:region: us-central1
+  wealthpilot-v2:project-number: "<YOUR_GCP_PROJECT_NUMBER>"
+  wealthpilot-v2:vercel-team: <YOUR_VERCEL_TEAM_SLUG>
+  wealthpilot-v2:vercel-project: <YOUR_VERCEL_PROJECT_NAME>

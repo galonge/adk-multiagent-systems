@@ -1,0 +1,34 @@
+repos:
+  # general file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$              # trailing spaces are meaningful in markdown
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        exclude: .*tsconfig.*\.json$  # tsconfig uses JSONC (comments allowed)
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: detect-private-key
+      - id: check-merge-conflict
+
+  # python — ruff for linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # typescript — eslint via next.js lint script
+  - repo: local
+    hooks:
+      - id: eslint-frontend
+        name: eslint (wealth_pilot_ui)
+        entry: bash -c 'cd wealth_pilot_ui && npm run lint'
+        language: system
+        files: wealth_pilot_ui/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false

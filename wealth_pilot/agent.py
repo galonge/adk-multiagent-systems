@@ -8,7 +8,11 @@ Built with Google Agent Development Kit (ADK)
 # agentops.init()
 
 from google.adk.agents import LlmAgent, SequentialAgent
-from .tools.stock_tools import fetch_stock_price, get_company_info, save_user_preferences
+from .tools.stock_tools import (
+    fetch_stock_price,
+    get_company_info,
+    save_user_preferences,
+)
 from .callbacks.guardrails import (
     audit_log_before_agent,
     add_disclaimer_after_model,
@@ -21,6 +25,7 @@ from .tools.report_tools import save_portfolio_report
 from google.genai import types
 
 # ── Stock Analyst ─────────────────────────────────────
+# note: model is the V1 default — V2 overrides via model_switcher_callback
 stock_analyst = LlmAgent(
     name="StockAnalyst",
     model="gemini-2.5-flash",
@@ -41,10 +46,10 @@ Keep your analysis factual and data-driven.
 Do NOT make specific buy/sell recommendations.""",
     tools=[fetch_stock_price, get_company_info],
     before_tool_callback=validate_ticker_before_tool,
-    
 )
 
 # ── Portfolio Advisor ─────────────────────────────────
+# note: model is the V1 default — V2 overrides via model_switcher_callback
 portfolio_advisor = LlmAgent(
     name="PortfolioAdvisor",
     model="gemini-2.5-flash",
@@ -68,6 +73,7 @@ Always explain your reasoning.""",
 )
 
 # ── Report Generator ──────────────────────────────────
+# note: model is the V1 default — V2 overrides via model_switcher_callback
 report_generator = LlmAgent(
     name="ReportGenerator",
     model="gemini-2.5-flash",
@@ -94,9 +100,11 @@ analysis_pipeline = SequentialAgent(
 
 
 # ── Root Agent ────────────────────────────────────────
+# default to Flash so the app works even when Pro is overloaded.
+# V2 model switcher overrides this per-session via model_switcher_callback.
 root_agent = LlmAgent(
     name="WealthPilot",
-    model="gemini-2.5-pro",
+    model="gemini-2.5-flash",
     description="AI Wealth Advisor — analyzes stocks and builds portfolios.",
     instruction="""You are **WealthPilot**, an AI Wealth Advisor.
 

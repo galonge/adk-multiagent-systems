@@ -1,4 +1,6 @@
-google-adk
+google-adk[extensions]
+google-cloud-storage
+python-dotenv
 yfinance
 fpdf2
 httpx

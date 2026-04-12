@@ -13,18 +13,17 @@ from google.adk.tools import ToolContext
 def _clean(text: str) -> str:
     """Replace Unicode chars that Helvetica can't render and strip markdown."""
     return (
-        text
-        .replace("\u2014", "-")   # em-dash
-        .replace("\u2013", "-")   # en-dash
-        .replace("\u2018", "'")   # left single quote
-        .replace("\u2019", "'")   # right single quote
-        .replace("\u201c", '"')   # left double quote
-        .replace("\u201d", '"')   # right double quote
-        .replace("\u2022", "-")   # bullet
+        text.replace("\u2014", "-")  # em-dash
+        .replace("\u2013", "-")  # en-dash
+        .replace("\u2018", "'")  # left single quote
+        .replace("\u2019", "'")  # right single quote
+        .replace("\u201c", '"')  # left double quote
+        .replace("\u201d", '"')  # right double quote
+        .replace("\u2022", "-")  # bullet
         .replace("\u2026", "...")  # ellipsis
-        .replace("\u00a0", " ")   # non-breaking space
-        .replace("**", "")        # markdown bold
-        .replace("*", "")         # markdown italic
+        .replace("\u00a0", " ")  # non-breaking space
+        .replace("**", "")  # markdown bold
+        .replace("*", "")  # markdown italic
     )
 
 
@@ -35,14 +34,26 @@ class PortfolioReportPDF(FPDF):
         self.set_font("Helvetica", "B", 11)
         self.set_text_color(255, 255, 255)
         self.set_fill_color(26, 115, 232)
-        self.cell(0, 12, "  WealthPilot - AI Wealth Advisor", new_x="LMARGIN", new_y="NEXT", fill=True)
+        self.cell(
+            0,
+            12,
+            "  WealthPilot - AI Wealth Advisor",
+            new_x="LMARGIN",
+            new_y="NEXT",
+            fill=True,
+        )
         self.ln(4)
 
     def footer(self):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
         self.set_text_color(128, 128, 128)
-        self.cell(0, 10, f"Page {self.page_no()}/{{nb}}  |  Google Agent Development Kit", align="C")
+        self.cell(
+            0,
+            10,
+            f"Page {self.page_no()}/{{nb}}  |  Google Agent Development Kit",
+            align="C",
+        )
 
 
 def _build_pdf(title: str, content: str, timestamp: str) -> bytes:
@@ -107,11 +118,13 @@ def _build_pdf(title: str, content: str, timestamp: str) -> bytes:
     pdf.cell(0, 8, "  DISCLAIMER", new_x="LMARGIN", new_y="NEXT", fill=True, border=1)
     pdf.set_font("Helvetica", "", 9)
     pdf.multi_cell(
-        0, 5,
+        0,
+        5,
         "This report is AI-generated analysis for informational purposes only. "
         "It does not constitute financial advice. Always consult a qualified "
         "financial advisor before making investment decisions.",
-        fill=True, border="LRB",
+        fill=True,
+        border="LRB",
     )
 
     return pdf.output()
@@ -127,7 +140,7 @@ async def save_portfolio_report(
     Args:
         report_title: Title of the report.
         report_content: The full report content as plain text or markdown.
-      
+
     Returns:
         JSON confirmation with filename and version number.
     """
@@ -140,26 +153,32 @@ async def save_portfolio_report(
         fallback = f"# {report_title}\n\nGenerated: {timestamp}\n\n{report_content}"
         artifact = types.Part.from_text(text=fallback)
         version = await tool_context.save_artifact(
-            filename="portfolio_report.md", artifact=artifact,
+            filename="portfolio_report.md",
+            artifact=artifact,
         )
-        return json.dumps({
-            "status": "report_saved_as_text",
-            "filename": "portfolio_report.md",
-            "version": version,
-            "note": f"PDF failed ({e}), saved as markdown instead.",
-        })
+        return json.dumps(
+            {
+                "status": "report_saved_as_text",
+                "filename": "portfolio_report.md",
+                "version": version,
+                "note": f"PDF failed ({e}), saved as markdown instead.",
+            }
+        )
 
     # Save as PDF artifact
     artifact = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
     version = await tool_context.save_artifact(
-        filename="portfolio_report.pdf", artifact=artifact,
+        filename="portfolio_report.pdf",
+        artifact=artifact,
     )
 
-    return json.dumps({
-        "status": "report_saved",
-        "filename": "portfolio_report.pdf",
-        "version": version,
-        "title": report_title,
-        "timestamp": timestamp,
-        "message": f"PDF report saved (version {version}). Download from the Artifacts panel.",
-    })
+    return json.dumps(
+        {
+            "status": "report_saved",
+            "filename": "portfolio_report.pdf",
+            "version": version,
+            "title": report_title,
+            "timestamp": timestamp,
+            "message": f"PDF report saved (version {version}). Download from the Artifacts panel.",
+        }
+    )

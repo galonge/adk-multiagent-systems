@@ -1,0 +1,205 @@
+name: wealthpilot-v2
+runtime: yaml
+description: >
+  production infrastructure for WealthPilot V2 on Cloud Run.
+  provisions: WIF identity pool + OIDC provider, service account,
+  GCS artifacts bucket, Cloud Run IAM, and IAM bindings for
+  Vercel OIDC federation.
+  deploy with 'pulumi up', tear down with 'pulumi destroy'.
+
+config:
+  project: # GCP project ID
+    type: string
+  region: # GCP region for deployment
+    type: string
+    default: us-central1
+  project-number: # GCP project number (for WIF audience)
+    type: string
+  vercel-team: # Vercel team slug (from team URL, e.g. https://vercel.com/your-team)
+    type: string
+  vercel-project: # Vercel project name
+    type: string
+    default: wealth_pilot_ui
+  cloud-run-service: # Cloud Run service name
+    type: string
+    default: wealth-pilot-service
+
+resources:
+
+  # ─────────────────────────────────────────────────────
+  # enable required GCP APIs
+  # ─────────────────────────────────────────────────────
+
+  api-aiplatform:
+    type: gcp:projects:Service
+    properties:
+      service: aiplatform.googleapis.com
+      project: ${project}
+      disableOnDestroy: false
+
+  api-iam:
+    type: gcp:projects:Service
+    properties:
+      service: iam.googleapis.com
+      project: ${project}
+      disableOnDestroy: false
+
+  api-storage:
+    type: gcp:projects:Service
+    properties:
+      service: storage.googleapis.com
+      project: ${project}
+      disableOnDestroy: false
+
+  api-sts:
+    type: gcp:projects:Service
+    properties:
+      service: sts.googleapis.com
+      project: ${project}
+      disableOnDestroy: false
+
+  api-iamcredentials:
+    type: gcp:projects:Service
+    properties:
+      service: iamcredentials.googleapis.com
+      project: ${project}
+      disableOnDestroy: false
+
+  api-run:
+    type: gcp:projects:Service
+    properties:
+      service: run.googleapis.com
+      project: ${project}
+      disableOnDestroy: false
+
+  # ─────────────────────────────────────────────────────
+  # Workload Identity Federation — Vercel OIDC
+  # ─────────────────────────────────────────────────────
+
+  wif-pool:
+    type: gcp:iam:WorkloadIdentityPool
+    properties:
+      workloadIdentityPoolId: vercel
+      displayName: Vercel
+      project: ${project}
+    options:
+      dependsOn:
+        - ${api-iam}
+        - ${api-sts}
+
+  wif-provider:
+    type: gcp:iam:WorkloadIdentityPoolProvider
+    properties:
+      workloadIdentityPoolId: ${wif-pool.workloadIdentityPoolId}
+      workloadIdentityPoolProviderId: vercel
+      displayName: Vercel OIDC
+      attributeMapping:
+        google.subject: assertion.sub
+      oidc:
+        issuerUri: https://oidc.vercel.com/${vercel-team}
+        allowedAudiences:
+          - https://vercel.com/${vercel-team}
+      project: ${project}
+
+  # ─────────────────────────────────────────────────────
+  # service account — Vercel proxy identity
+  # ─────────────────────────────────────────────────────
+
+  vercel-sa:
+    type: gcp:serviceaccount:Account
+    properties:
+      accountId: vercel-wealthpilot
+      displayName: WealthPilot Vercel Proxy
+      project: ${project}
+    options:
+      dependsOn:
+        - ${api-iam}
+
+  # ─────────────────────────────────────────────────────
+  # IAM — grant SA access to Cloud Run + GCS
+  # ─────────────────────────────────────────────────────
+
+  # SA can call Cloud Run service (Vercel → Cloud Run)
+  cloud-run-invoker:
+    type: gcp:cloudrunv2:ServiceIamMember
+    properties:
+      project: ${project}
+      location: ${region}
+      name: ${cloud-run-service}
+      role: roles/run.invoker
+      member: serviceAccount:${vercel-sa.email}
+    options:
+      dependsOn:
+        - ${api-run}
+
+  # SA can still call Vertex AI APIs if needed (model inference, etc.)
+  sa-aiplatform-user:
+    type: gcp:projects:IAMMember
+    properties:
+      project: ${project}
+      role: roles/aiplatform.user
+      member: serviceAccount:${vercel-sa.email}
+
+  # WIF can impersonate the SA (production environment only)
+  sa-wif-binding:
+    type: gcp:serviceaccount:IAMMember
+    properties:
+      serviceAccountId: ${vercel-sa.name}
+      role: roles/iam.workloadIdentityUser
+      member: principal://iam.googleapis.com/${wif-pool.name}/subject/owner:${vercel-team}:project:${vercel-project}:environment:production
+    options:
+      dependsOn:
+        - ${wif-pool}
+        - ${wif-provider}
+
+  # SA can generate ID tokens for itself (needed for Cloud Run auth)
+  sa-token-creator:
+    type: gcp:serviceaccount:IAMMember
+    properties:
+      serviceAccountId: ${vercel-sa.name}
+      role: roles/iam.serviceAccountTokenCreator
+      member: serviceAccount:${vercel-sa.email}
+
+  # ─────────────────────────────────────────────────────
+  # GCS bucket — artifact storage (PDF reports)
+  # ─────────────────────────────────────────────────────
+
+  artifacts-bucket:
+    type: gcp:storage:Bucket
+    properties:
+      name: ${project}-wealthpilot-artifacts
+      location: ${region}
+      uniformBucketLevelAccess: true
+      publicAccessPrevention: enforced
+      project: ${project}
+    options:
+      dependsOn:
+        - ${api-storage}
+
+  # Vercel SA can read/write artifacts (for artifact proxy downloads)
+  sa-storage-admin:
+    type: gcp:storage:BucketIAMMember
+    properties:
+      bucket: ${artifacts-bucket.name}
+      role: roles/storage.objectAdmin
+      member: serviceAccount:${vercel-sa.email}
+
+  # Cloud Run default compute SA can read/write artifacts
+  # (the ADK server running on Cloud Run writes PDFs to GCS)
+  cloudrun-storage-admin:
+    type: gcp:storage:BucketIAMMember
+    properties:
+      bucket: ${artifacts-bucket.name}
+      role: roles/storage.objectAdmin
+      member: serviceAccount:${project-number}-compute@developer.gserviceaccount.com
+
+# ─────────────────────────────────────────────────────
+# outputs — used by Vercel env vars and deploy scripts
+# ─────────────────────────────────────────────────────
+
+outputs:
+  serviceAccountEmail: ${vercel-sa.email}
+  artifactsBucket: ${artifacts-bucket.name}
+  wifPoolId: ${wif-pool.workloadIdentityPoolId}
+  wifProviderId: ${wif-provider.workloadIdentityPoolProviderId}
+  cloudRunService: ${cloud-run-service}
