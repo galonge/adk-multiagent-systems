@@ -11,7 +11,7 @@ things go wrong. ADK is the engine. observability is your dashboard.
 
 ---
 
-## the two observability systems
+## the ADK observability systems
 
 ```mermaid
 flowchart TD

@@ -5,15 +5,26 @@ from google.adk.agents import LlmAgent, SequentialAgent
 # 1. mock tools (the kitchen stations)
 # ==========================================
 
+
 def grill_beef(doneness: str) -> str:
     """simulates the Grill Chef cooking the beef patty."""
     # returns data representing cooked meat as JSON
-    return json.dumps({"item": "Angus Beef Patty", "status": f"Cooked {doneness}", "weight": "1/2 lb"})
+    return json.dumps(
+        {"item": "Angus Beef Patty", "status": f"Cooked {doneness}", "weight": "1/2 lb"}
+    )
+
 
 def prep_greens(style: str) -> str:
     """simulates the Salad Chef preparing the fresh greens and toppings."""
     # returns data representing the prepped vegetables as JSON
-    return json.dumps({"item": "Fresh Greens", "style": style, "components": ["Crisp Lettuce", "Heirloom Tomato", "Red Onion"]})
+    return json.dumps(
+        {
+            "item": "Fresh Greens",
+            "style": style,
+            "components": ["Crisp Lettuce", "Heirloom Tomato", "Red Onion"],
+        }
+    )
+
 
 def assemble_plate(meat_json: str, greens_json: str) -> dict:
     """Combines the grill and salad outputs into a single burger order."""
@@ -25,8 +36,9 @@ def assemble_plate(meat_json: str, greens_json: str) -> dict:
         "grill": meat,
         "salad": greens,
         "status": "ready",
-        "assembled_by": "ADK Kitchen Brigade"
+        "assembled_by": "ADK Kitchen Brigade",
     }
+
 
 # ==========================================
 # 2. the chefs (sub-agents)
@@ -39,7 +51,7 @@ grill_chef = LlmAgent(
     description="Cooks the beef patty to the requested doneness using the grill.",
     instruction="""You are the Grill Chef. Your ONLY job is to use the grill_beef tool
     to cook the meat to the requested doneness. Do not format the output. Just return the raw JSON.""",
-    tools=[grill_beef]
+    tools=[grill_beef],
 )
 
 # the salad chef gets a fast model. focused only on prepping the greens.
@@ -49,7 +61,7 @@ salad_chef = LlmAgent(
     description="Preps the fresh greens and toppings in the requested style.",
     instruction="""You are the Salad Chef. Your ONLY job is to use the prep_greens
     tool to prepare the requested style of greens. Return the raw JSON from the tool.""",
-    tools=[prep_greens]
+    tools=[prep_greens],
 )
 
 # the plater agent gets a fast model. focused only on assembly and presentation.
@@ -66,7 +78,7 @@ plater_agent = LlmAgent(
     - Include the cooking style, greens style, and all components
     - Add a warm sign-off message
     - Do NOT show raw JSON to the guest — make it feel like a real restaurant experience""",
-    tools=[assemble_plate]
+    tools=[assemble_plate],
 )
 
 # ==========================================
@@ -77,7 +89,7 @@ plater_agent = LlmAgent(
 kitchen_expediter = SequentialAgent(
     name="KitchenExpediter",
     description="Runs the full kitchen pipeline in order: grill -> salad -> plate.",
-    sub_agents=[grill_chef, salad_chef, plater_agent]
+    sub_agents=[grill_chef, salad_chef, plater_agent],
 )
 
 # ==========================================
@@ -100,5 +112,5 @@ root_agent = LlmAgent(
 
     Once you have both answers, transfer the order to KitchenExpediter to prepare the meal.
     Do not cook or prep anything yourself.""",
-    sub_agents=[kitchen_expediter]
+    sub_agents=[kitchen_expediter],
 )
